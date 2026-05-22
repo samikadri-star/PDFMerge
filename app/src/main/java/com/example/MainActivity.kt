@@ -215,7 +215,7 @@ fun PdfMergerApp(viewModel: MergeViewModel) {
                         item {
                             EmptyWorkspaceCard(
                                 onSelectClick = {
-                                    pdfPickerLauncher.launch(arrayOf("application/pdf"))
+                                    pdfPickerLauncher.launch(arrayOf("application/pdf", "image/jpeg", "image/png", "image/webp"))
                                 }
                             )
                         }
@@ -245,7 +245,7 @@ fun PdfMergerApp(viewModel: MergeViewModel) {
                             ) {
                                 // Mini button to add more
                                 Button(
-                                    onClick = { pdfPickerLauncher.launch(arrayOf("application/pdf")) },
+                                    onClick = { pdfPickerLauncher.launch(arrayOf("application/pdf", "image/jpeg", "image/png", "image/webp")) },
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = MaterialTheme.colorScheme.secondaryContainer,
                                         contentColor = MaterialTheme.colorScheme.onSecondaryContainer
@@ -740,19 +740,48 @@ fun SelectedPdfItemRow(
             Column(
                 modifier = Modifier.weight(1f)
             ) {
-                Text(
-                    text = item.name,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = formatFileSize(item.size),
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = if (item.isImage) Icons.Default.Star else Icons.Default.Info,
+                        contentDescription = if (item.isImage) "صورة" else "ملف",
+                        tint = if (item.isImage) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = item.name,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = formatFileSize(item.size),
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "•",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                    Text(
+                        text = if (item.isImage) "صورة للدمج" else "مستند PDF",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (item.isImage) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
+                    )
+                }
             }
 
             // Controls (Up, Down, Delete buttons)

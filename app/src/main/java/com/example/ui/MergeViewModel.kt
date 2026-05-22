@@ -24,7 +24,8 @@ data class SelectedPdf(
     val id: String = UUID.randomUUID().toString(),
     val uri: Uri,
     val name: String,
-    val size: Long
+    val size: Long,
+    val isImage: Boolean = false
 )
 
 class MergeViewModel(private val repository: MergeHistoryRepository) : ViewModel() {
@@ -111,7 +112,7 @@ class MergeViewModel(private val repository: MergeHistoryRepository) : ViewModel
     fun mergeSelected(context: Context, customName: String) {
         val pdfs = _selectedPdfs.value
         if (pdfs.size < 2) {
-            _errorMessage.value = "الرجاء اختيار ملفي بي دي اف على الأقل للدمج"
+            _errorMessage.value = "الرجاء اختيار ملفين على الأقل للدمج"
             return
         }
 
@@ -139,18 +140,26 @@ class MergeViewModel(private val repository: MergeHistoryRepository) : ViewModel
                     
                     val tempFiles = mutableListOf<File>()
                     
-                    // Copy content streams to local cache files to avoid permission lifetime issues
+                    // Copy content streams or convert image to local cache files
                     for (item in pdfs) {
                         try {
                             val tempFile = File(context.cacheDir, "temp_merge_${UUID.randomUUID()}_${item.name}")
-                            context.contentResolver.openInputStream(item.uri)?.use { input ->
-                                tempFile.outputStream().use { output ->
-                                    input.copyTo(output)
+                            if (item.isImage) {
+                                val success = convertImageToPdf(context, item.uri, tempFile)
+                                if (success && tempFile.exists() && tempFile.length() > 0) {
+                                    tempFiles.add(tempFile)
+                                    merger.addSource(tempFile)
                                 }
-                            }
-                            if (tempFile.exists() && tempFile.length() > 0) {
-                                tempFiles.add(tempFile)
-                                merger.addSource(tempFile)
+                            } else {
+                                context.contentResolver.openInputStream(item.uri)?.use { input ->
+                                    tempFile.outputStream().use { output ->
+                                        input.copyTo(output)
+                                    }
+                                }
+                                if (tempFile.exists() && tempFile.length() > 0) {
+                                    tempFiles.add(tempFile)
+                                    merger.addSource(tempFile)
+                                }
                             }
                         } catch (ex: Exception) {
                             ex.printStackTrace()
@@ -158,7 +167,7 @@ class MergeViewModel(private val repository: MergeHistoryRepository) : ViewModel
                     }
 
                     if (tempFiles.size < 2) {
-                        throw Exception("فشل في قراءة ملفات الـ PDF المحددة")
+                        throw Exception("فشل في معالجة الملفات المحددة")
                     }
 
                     // Perform pdfBox merge
@@ -196,15 +205,49 @@ class MergeViewModel(private val repository: MergeHistoryRepository) : ViewModel
                 _mergeSuccess.value = historyRecord.copy(id = insertedId.toInt())
                 _selectedPdfs.value = emptyList() // clear draft on success
             } else {
-                _errorMessage.value = "حدث خطأ أثناء دمج الملفات. يرجى التحقق من صحة ملفات الـ PDF."
+                _errorMessage.value = "حدث خطأ أثناء دمج الملفات. يرجى التحقق من صحة الملفات أو الصور المحددة."
             }
         }
     }
 
-    private fun getPdfMetadata(context: Context, uri: Uri): SelectedPdf {
-        var name = "file_${System.currentTimeMillis()}.pdf"
-        var size = 0L
+    private fun convertImageToPdf(context: Context, uri: Uri, outputFile: File): Boolean {
+        var inputStream: java.io.InputStream? = null
+        var bitmap: android.graphics.Bitmap? = null
+        var pdfDoc: android.graphics.pdf.PdfDocument? = null
         try {
+            inputStream = context.contentResolver.openInputStream(uri)
+            bitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
+            if (bitmap == null) return false
+            
+            pdfDoc = android.graphics.pdf.PdfDocument()
+            val pageInfo = android.graphics.pdf.PdfDocument.PageInfo.Builder(bitmap.width, bitmap.height, 1).create()
+            val page = pdfDoc.startPage(pageInfo)
+            val canvas = page.canvas
+            canvas.drawBitmap(bitmap, 0f, 0f, null)
+            pdfDoc.finishPage(page)
+            
+            outputFile.outputStream().use { fos ->
+                pdfDoc.writeTo(fos)
+            }
+            return true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return false
+        } finally {
+            try { inputStream?.close() } catch (ex: Exception) {}
+            try { bitmap?.recycle() } catch (ex: Exception) {}
+            try { pdfDoc?.close() } catch (ex: Exception) {}
+        }
+    }
+
+    private fun getPdfMetadata(context: Context, uri: Uri): SelectedPdf {
+        var name = "file_${System.currentTimeMillis()}"
+        var size = 0L
+        var isImg = false
+        try {
+            val mimeType = context.contentResolver.getType(uri)
+            isImg = mimeType?.startsWith("image/") ?: false
+            
             context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
                 val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
                 val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
@@ -223,10 +266,10 @@ class MergeViewModel(private val repository: MergeHistoryRepository) : ViewModel
         } catch (e: Exception) {
             e.printStackTrace()
         }
-        if (!name.lowercase().endsWith(".pdf")) {
+        if (!isImg && !name.lowercase().endsWith(".pdf")) {
             name = "$name.pdf"
         }
-        return SelectedPdf(uri = uri, name = name, size = size)
+        return SelectedPdf(uri = uri, name = name, size = size, isImage = isImg)
     }
 }
 
