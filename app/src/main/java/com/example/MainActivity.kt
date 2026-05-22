@@ -99,12 +99,23 @@ fun PdfMergerApp(viewModel: MergeViewModel) {
             topBar = {
                 CenterAlignedTopAppBar(
                     title = {
-                        Text(
-                            text = stringResource(id = R.string.app_name),
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = stringResource(id = R.string.app_name),
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
+                            Text(
+                                text = "سامي القادري",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     },
                     navigationIcon = {
                         IconButton(onClick = { /* App Info or menu */ }) {
@@ -137,6 +148,28 @@ fun PdfMergerApp(viewModel: MergeViewModel) {
                 ) {
                     item {
                         Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .widthIn(max = 600.dp)
+                                .padding(horizontal = 4.dp, vertical = 2.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "مرحباً بك في التطبيق",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.secondary
+                            )
+                            Text(
+                                text = "تطوير: سامي القادري",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
                         // Main Welcome Header
                         HeroBanner()
                     }
