@@ -1,0 +1,8 @@
+{
+  "name": "دامج الـ PDF",
+  "description": "تطبيق لدمج عدة ملفات بي دي اف في ملف واحد بسهولة",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

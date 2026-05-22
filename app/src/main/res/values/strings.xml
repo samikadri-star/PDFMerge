@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">دامج الـ PDF</string>
+    <string name="add_pdf_files">إضافة ملفات PDF</string>
+    <string name="merge_files">بدء دمج الملفات</string>
+    <string name="no_files_selected">لم تقم باختيار أي ملف بي دي اف</string>
+    <string name="select_instructions">اضغط على الزر أدناه لاختيار ملفات PDF وترتيبها لدمجها</string>
+    <string name="history_title">السجل والملفات السابقة</string>
+    <string name="history_empty">لا توجد ملفات مدمجة سابقاً في السجل</string>
+    <string name="success_merged">تم الدمج بنجاح!</string>
+</resources>
