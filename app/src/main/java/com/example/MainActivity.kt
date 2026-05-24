@@ -61,11 +61,49 @@ class MainActivity : ComponentActivity() {
         val database = AppDatabase.getDatabase(this)
         val repository = MergeHistoryRepository(database.mergeHistoryDao())
         val factory = MergeViewModelFactory(repository)
+        val viewModel = androidx.lifecycle.ViewModelProvider(this, factory)[MergeViewModel::class.java]
+
+        // Handle incoming shared files/images from other apps (e.g., file manager or gallery)
+        intent?.let { handleSendIntent(it, viewModel) }
 
         setContent {
             MyApplicationTheme {
-                val viewModel: MergeViewModel = androidx.lifecycle.viewmodel.compose.viewModel(factory = factory)
                 PdfMergerApp(viewModel)
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val database = AppDatabase.getDatabase(this)
+        val repository = MergeHistoryRepository(database.mergeHistoryDao())
+        val factory = MergeViewModelFactory(repository)
+        val viewModel = androidx.lifecycle.ViewModelProvider(this, factory)[MergeViewModel::class.java]
+        handleSendIntent(intent, viewModel)
+    }
+
+    private fun handleSendIntent(intent: Intent, viewModel: MergeViewModel) {
+        val action = intent.action
+        val type = intent.type
+        if (type != null) {
+            try {
+                if (Intent.ACTION_SEND == action) {
+                    val uri = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM) ?: intent.data
+                    if (uri != null) {
+                        viewModel.addPdfs(listOf(uri), this)
+                        Toast.makeText(this, "تمت إضافة الملف/الصورة بنجاح. يمكنك ترتيبها الآن ثم دمجها بشكل متناسق.", Toast.LENGTH_LONG).show()
+                    }
+                } else if (Intent.ACTION_SEND_MULTIPLE == action) {
+                    val uris = intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)
+                    if (uris != null && uris.isNotEmpty()) {
+                        viewModel.addPdfs(uris, this)
+                        Toast.makeText(this, "تمت إضافة ${uris.size} من الملفات/الصور بنجاح. يمكنك ترتيبها الآن ثم دمجها بشكل متناسق.", Toast.LENGTH_LONG).show()
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                Toast.makeText(this, "فشل في معالجة الملفات المشتركة", Toast.LENGTH_SHORT).show()
             }
         }
     }
