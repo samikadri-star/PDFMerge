@@ -131,10 +131,84 @@ class MergeViewModel(private val repository: MergeHistoryRepository) : ViewModel
                 try {
                     val merger = PDFMergerUtility()
                     
-                    val outputDir = File(context.filesDir, "merged_pdfs")
-                    if (!outputDir.exists()) {
-                        outputDir.mkdirs()
+                    // Choose the user-accessible storage folder named "الملفات_المدموجه" in the primary storage
+                    var outputDir: File? = null
+                    val candidates = mutableListOf<File>()
+
+                    // Candidate 1: Main internal storage root "الملفات_المدموجه" directly (works on Android 9/Legacy or if system permits)
+                    try {
+                        val externalStorage = android.os.Environment.getExternalStorageDirectory()
+                        if (externalStorage != null) {
+                            candidates.add(File(externalStorage, "الملفات_المدموجه"))
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
                     }
+
+                    // Candidate 2: "الملفات_المدموجه" inside Documents (the standard modern accessible location in main storage)
+                    try {
+                        val docsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOCUMENTS)
+                        if (docsDir != null) {
+                            candidates.add(File(docsDir, "الملفات_المدموجه"))
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+
+                    // Candidate 3: "الملفات_المدموجه" inside Downloads (standard modern accessible location in main storage)
+                    try {
+                        val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+                        if (downloadsDir != null) {
+                            candidates.add(File(downloadsDir, "الملفات_المدموجه"))
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+
+                    // Candidate 4: External files folder of the app
+                    try {
+                        val extFilesDir = context.getExternalFilesDir(null)
+                        if (extFilesDir != null) {
+                            candidates.add(File(extFilesDir, "الملفات_المدموجه"))
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+
+                    // Find first candidate we can create and write to
+                    for (candidate in candidates) {
+                        try {
+                            var canUse = false
+                            if (!candidate.exists()) {
+                                val success = candidate.mkdirs()
+                                if (success || candidate.exists()) {
+                                    canUse = true
+                                }
+                            } else {
+                                canUse = true
+                            }
+                            if (canUse) {
+                                // Try creating a dummy test file to verify write access
+                                val testFile = File(candidate, ".test_write_" + System.currentTimeMillis())
+                                if (testFile.createNewFile()) {
+                                    testFile.delete()
+                                    outputDir = candidate
+                                    break
+                                }
+                            }
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+
+                    if (outputDir == null) {
+                        // Fallback to app's internal filesDir
+                        outputDir = File(context.filesDir, "الملفات_المدموجه")
+                        if (!outputDir.exists()) {
+                            outputDir.mkdirs()
+                        }
+                    }
+
                     val outputFile = File(outputDir, formattedName)
                     merger.destinationFileName = outputFile.absolutePath
                     

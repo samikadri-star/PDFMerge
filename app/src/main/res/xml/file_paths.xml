@@ -3,4 +3,5 @@
     <cache-path name="merged_pdfs" path="." />
     <files-path name="pdf_history" path="." />
     <external-files-path name="external_pdfs" path="." />
+    <external-path name="external_shared" path="." />
 </paths>

@@ -514,6 +514,7 @@ fun PdfMergerApp(viewModel: MergeViewModel) {
                                     verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     SuccessDetailRow(label = "اسم الملف :", value = successItem.fileName)
+                                    SuccessDetailRow(label = "مكان الحفظ :", value = getDisplayDirectory(successItem.filePath))
                                     SuccessDetailRow(label = "الحجم الكلي :", value = formatFileSize(successItem.fileSize))
                                     SuccessDetailRow(label = "عدد الملفات المدمجة :", value = "${successItem.filesCount} ملفات")
                                     SuccessDetailRow(label = "وقت وتاريخ الدمج :", value = formatTimestamp(successItem.timestamp))
@@ -1069,6 +1070,17 @@ fun formatFileSize(bytes: Long): String {
 fun formatTimestamp(timestamp: Long): String {
     val sdf = SimpleDateFormat("yyyy-MM-dd hh:mm a", Locale("ar"))
     return sdf.format(Date(timestamp))
+}
+
+fun getDisplayDirectory(filePath: String): String {
+    return when {
+        filePath.contains("/Documents/الملفات_المدموجه") -> "المستندات / الملفات_المدموجه"
+        filePath.contains("/Download/الملفات_المدموجه") -> "التنزيلات / الملفات_المدموجه"
+        filePath.contains("/Android/data/") -> "مجلد التطبيق الخاص (خارجي)"
+        filePath.contains("/files/الملفات_المدموجه") -> "مجلد التطبيق الخاص (داخلي)"
+        filePath.contains("/الملفات_المدموجه") -> "الذاكرة الرئيسية / الملفات_المدموجه"
+        else -> "الملفات_المدموجه"
+    }
 }
 
 private fun openPdf(context: Context, filePath: String) {
