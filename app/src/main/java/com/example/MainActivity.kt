@@ -133,6 +133,18 @@ fun PdfMergerApp(viewModel: MergeViewModel) {
             }
         )
 
+        val storagePermissionLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission(),
+            onResult = { isGranted ->
+                if (isGranted) {
+                    viewModel.mergeSelected(context, customFileName)
+                } else {
+                    Toast.makeText(context, "تم دمج الملف؛ سيتم حفظه تلقائياً في الذاكرة المتاحة.", Toast.LENGTH_SHORT).show()
+                    viewModel.mergeSelected(context, customFileName)
+                }
+            }
+        )
+
         Scaffold(
             topBar = {
                 CenterAlignedTopAppBar(
@@ -348,7 +360,19 @@ fun PdfMergerApp(viewModel: MergeViewModel) {
 
                                         Button(
                                             onClick = {
-                                                viewModel.mergeSelected(context, customFileName)
+                                                val hasWritePermission = if (android.os.Build.VERSION.SDK_INT <= android.os.Build.VERSION_CODES.Q) {
+                                                    androidx.core.content.ContextCompat.checkSelfPermission(
+                                                        context,
+                                                        android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+                                                    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                                                } else {
+                                                     true
+                                                }
+                                                if (hasWritePermission) {
+                                                    viewModel.mergeSelected(context, customFileName)
+                                                } else {
+                                                    storagePermissionLauncher.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                                                }
                                             },
                                             enabled = selectedPdfs.size >= 2,
                                             modifier = Modifier

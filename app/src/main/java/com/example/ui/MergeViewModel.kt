@@ -3,6 +3,9 @@ package com.example.ui
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.content.ContentValues
+import android.os.Build
+import android.provider.MediaStore
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -130,87 +133,8 @@ class MergeViewModel(private val repository: MergeHistoryRepository) : ViewModel
             val resultFile = withContext(Dispatchers.IO) {
                 try {
                     val merger = PDFMergerUtility()
-                    
-                    // Choose the user-accessible storage folder named "الملفات_المدموجه" in the primary storage
-                    var outputDir: File? = null
-                    val candidates = mutableListOf<File>()
-
-                    // Candidate 1: Main internal storage root "الملفات_المدموجه" directly (works on Android 9/Legacy or if system permits)
-                    try {
-                        val externalStorage = android.os.Environment.getExternalStorageDirectory()
-                        if (externalStorage != null) {
-                            candidates.add(File(externalStorage, "الملفات_المدموجه"))
-                        }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-
-                    // Candidate 2: "الملفات_المدموجه" inside Documents (the standard modern accessible location in main storage)
-                    try {
-                        val docsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOCUMENTS)
-                        if (docsDir != null) {
-                            candidates.add(File(docsDir, "الملفات_المدموجه"))
-                        }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-
-                    // Candidate 3: "الملفات_المدموجه" inside Downloads (standard modern accessible location in main storage)
-                    try {
-                        val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
-                        if (downloadsDir != null) {
-                            candidates.add(File(downloadsDir, "الملفات_المدموجه"))
-                        }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-
-                    // Candidate 4: External files folder of the app
-                    try {
-                        val extFilesDir = context.getExternalFilesDir(null)
-                        if (extFilesDir != null) {
-                            candidates.add(File(extFilesDir, "الملفات_المدموجه"))
-                        }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-
-                    // Find first candidate we can create and write to
-                    for (candidate in candidates) {
-                        try {
-                            var canUse = false
-                            if (!candidate.exists()) {
-                                val success = candidate.mkdirs()
-                                if (success || candidate.exists()) {
-                                    canUse = true
-                                }
-                            } else {
-                                canUse = true
-                            }
-                            if (canUse) {
-                                // Try creating a dummy test file to verify write access
-                                val testFile = File(candidate, ".test_write_" + System.currentTimeMillis())
-                                if (testFile.createNewFile()) {
-                                    testFile.delete()
-                                    outputDir = candidate
-                                    break
-                                }
-                            }
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
-                    }
-
-                    if (outputDir == null) {
-                        // Fallback to app's internal filesDir
-                        outputDir = File(context.filesDir, "الملفات_المدموجه")
-                        if (!outputDir.exists()) {
-                            outputDir.mkdirs()
-                        }
-                    }
-
-                    val outputFile = File(outputDir, formattedName)
-                    merger.destinationFileName = outputFile.absolutePath
+                    val tempOutputFile = File(context.cacheDir, "temp_final_merged_${UUID.randomUUID()}.pdf")
+                    merger.destinationFileName = tempOutputFile.absolutePath
                     
                     val tempFiles = mutableListOf<File>()
                     
@@ -254,8 +178,16 @@ class MergeViewModel(private val repository: MergeHistoryRepository) : ViewModel
                         }
                     }
 
-                    if (outputFile.exists() && outputFile.length() > 0) {
-                        outputFile
+                    if (tempOutputFile.exists() && tempOutputFile.length() > 0) {
+                        // Successfully merged inside cache! Now copy/save to 'الملفات_المدموجه' directory
+                        val savedFile = saveFileToPublicFolder(context, tempOutputFile, formattedName)
+                        
+                        // Delete cached temp output
+                        if (tempOutputFile.exists()) {
+                            tempOutputFile.delete()
+                        }
+                        
+                        savedFile
                     } else {
                         null
                     }
@@ -282,6 +214,123 @@ class MergeViewModel(private val repository: MergeHistoryRepository) : ViewModel
                 _errorMessage.value = "حدث خطأ أثناء دمج الملفات. يرجى التحقق من صحة الملفات أو الصور المحددة."
             }
         }
+    }
+
+    private fun saveFileToPublicFolder(context: Context, tempFile: File, formattedName: String): File {
+        // Method 1: On Android 10 (API Q, 29) & higher, use MediaStore to store in Download/الملفات_المدموجه
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val resolver = context.contentResolver
+            val contentValues = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, formattedName)
+                put(MediaStore.MediaColumns.MIME_TYPE, "application/pdf")
+                put(MediaStore.MediaColumns.RELATIVE_PATH, "Download/الملفات_المدموجه")
+                put(MediaStore.MediaColumns.IS_PENDING, 1)
+            }
+            
+            try {
+                val collectionUri = MediaStore.Downloads.EXTERNAL_CONTENT_URI
+                val uri = resolver.insert(collectionUri, contentValues)
+                if (uri != null) {
+                    resolver.openOutputStream(uri)?.use { outputStream ->
+                        tempFile.inputStream().use { inputStream ->
+                            inputStream.copyTo(outputStream)
+                        }
+                    }
+                    
+                    // Clear pending status
+                    contentValues.clear()
+                    contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
+                    resolver.update(uri, contentValues, null, null)
+                    
+                    // Retrieve the actual path on disk
+                    var path: String? = null
+                    resolver.query(uri, arrayOf(MediaStore.MediaColumns.DATA), null, null, null)?.use { cursor ->
+                        if (cursor.moveToFirst()) {
+                            val dataIdx = cursor.getColumnIndex(MediaStore.MediaColumns.DATA)
+                            if (dataIdx != -1) {
+                                path = cursor.getString(dataIdx)
+                            }
+                        }
+                    }
+                    
+                    if (path != null) {
+                        val savedFile = File(path!!)
+                        if (savedFile.exists() && savedFile.length() > 0) {
+                            return savedFile
+                        }
+                    } else {
+                        // Fallback: copy to safe external cache or files dir
+                        val fallbackFile = File(context.filesDir, formattedName)
+                        tempFile.copyTo(fallbackFile, overwrite = true)
+                        return fallbackFile
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        
+        // Method 2: Standard java.io.File directly in standard public folders
+        val foldersToTry = mutableListOf<File>()
+        
+        // Try inside Documents
+        try {
+            val docsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOCUMENTS)
+            if (docsDir != null) {
+                foldersToTry.add(File(docsDir, "الملفات_المدموجه"))
+            }
+        } catch (e: Exception) { e.printStackTrace() }
+
+        // Try inside Downloads
+        try {
+            val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+            if (downloadsDir != null) {
+                foldersToTry.add(File(downloadsDir, "الملفات_المدموجه"))
+            }
+        } catch (e: Exception) { e.printStackTrace() }
+
+        // Try to save directly in "/storage/emulated/0/الملفات_المدموجه" (root of SD Card)
+        try {
+            val extDir = android.os.Environment.getExternalStorageDirectory()
+            if (extDir != null) {
+                foldersToTry.add(File(extDir, "الملفات_المدموجه"))
+            }
+        } catch (e: Exception) { e.printStackTrace() }
+        
+        // Try inside App External Files
+        try {
+            val extAppDir = context.getExternalFilesDir(null)
+            if (extAppDir != null) {
+                foldersToTry.add(File(extAppDir, "الملفات_المدموجه"))
+            }
+        } catch (e: Exception) { e.printStackTrace() }
+
+        for (folder in foldersToTry) {
+            try {
+                if (!folder.exists()) {
+                    val success = folder.mkdirs()
+                    if (!success && !folder.exists()) {
+                        continue
+                    }
+                }
+                val finalFile = File(folder, formattedName)
+                tempFile.copyTo(finalFile, overwrite = true)
+                if (finalFile.exists() && finalFile.length() > 0) {
+                    return finalFile
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        
+        // Method 3: Absolute fallback, internal files dir
+        val fallbackDir = File(context.filesDir, "الملفات_المدموجه")
+        if (!fallbackDir.exists()) {
+            fallbackDir.mkdirs()
+        }
+        val finalFile = File(fallbackDir, formattedName)
+        tempFile.copyTo(finalFile, overwrite = true)
+        return finalFile
     }
 
     private fun convertImageToPdf(context: Context, uri: Uri, outputFile: File): Boolean {
